@@ -1,0 +1,65 @@
+From http://answers.unity3d.com/questions/1151550/how-can-i-upload-a-screenshot-directly-to-imgur.html 
+
+IEnumerator AppScreenshotUpload()
+     {
+         yield return new WaitForEndOfFrame();
+         Application.CaptureScreenshot(Application.persistentDataPath + filename);
+ 
+         //Make sure that the file save properly
+         float startTime = Time.time;
+         while (false == File.Exists(Application.persistentDataPath + filename))
+         {
+             if (Time.time - startTime > 5.0f)
+             {
+                 yield break;
+             }
+             yield return null;
+         }
+ 
+         //Read the saved file back into bytes
+         byte[] rawImage = File.ReadAllBytes(Application.persistentDataPath + filename);
+ 
+         //Before we try uploading it to Imgur we need a Server Certificate Validation Callback
+         ServicePointManager.ServerCertificateValidationCallback = MyRemoteCertificateValidationCallback;
+     
+         //Attempt to upload the image
+         using (var w = new WebClient())
+         {
+             string clientID = "put your Client ID here";
+             w.Headers.Add("Authorization", "Client-ID " + clientID);
+             var values = new NameValueCollection
+             {
+                 { "image", Convert.ToBase64String(rawImage) },
+                 { "type", "base64" },
+             };
+ 
+             byte[] response = w.UploadValues("https://api.imgur.com/3/image.xml", values);
+ 
+             Debug.Log(XDocument.Load(new MemoryStream(response)));
+         }
+     }
+ 
+     public bool MyRemoteCertificateValidationCallback(System.Object sender, X509Certificate certificate, X509Chain chain, SslPolicyErrors sslPolicyErrors)
+     {
+         bool isOk = true;
+         // If there are errors in the certificate chain, look at each error to determine the cause.
+         if (sslPolicyErrors != SslPolicyErrors.None)
+         {
+             for (int i = 0; i < chain.ChainStatus.Length; i++)
+             {
+                 if (chain.ChainStatus[i].Status != X509ChainStatusFlags.RevocationStatusUnknown)
+                 {
+                     chain.ChainPolicy.RevocationFlag = X509RevocationFlag.EntireChain;
+                     chain.ChainPolicy.RevocationMode = X509RevocationMode.Online;
+                     chain.ChainPolicy.UrlRetrievalTimeout = new TimeSpan(0, 1, 0);
+                     chain.ChainPolicy.VerificationFlags = X509VerificationFlags.AllFlags;
+                     bool chainIsValid = chain.Build((X509Certificate2)certificate);
+                     if (!chainIsValid)
+                     {
+                         isOk = false;
+                     }
+                 }
+             }
+         }
+         return isOk;
+     }
